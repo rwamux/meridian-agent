@@ -1,0 +1,137 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPO: meridian-production-backend
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv pip install --system ".[dev]"
+
+      - name: Run unit tests
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET_TEST }}
+          OPENROUTER_API_KEY: dummy
+        run: pytest tests/test_auth.py -v
+
+  build-and-deploy:
+    name: Build, push, deploy
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        id: build
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="$REGISTRY/$ECR_REPO:$IMAGE_TAG"
+          docker build -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+
+      - name: Update App Runner service with new image and secrets
+        env:
+          IMAGE_URI: ${{ steps.build.outputs.image_uri }}
+          SERVICE_ARN: ${{ secrets.APPRUNNER_SERVICE_ARN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MCP_SERVER_URL: ${{ vars.MCP_SERVER_URL }}
+          MODEL: ${{ vars.MODEL }}
+        run: |
+          # Write payload to a file so special characters in secrets don't break the JSON
+          cat > /tmp/apprunner-config.json <<EOF
+          {
+            "ImageRepository": {
+              "ImageIdentifier": "$IMAGE_URI",
+              "ImageConfiguration": {
+                "Port": "8000",
+                "RuntimeEnvironmentVariables": {
+                  "OPENROUTER_API_KEY": "$OPENROUTER_API_KEY",
+                  "JWT_SECRET": "$JWT_SECRET",
+                  "MCP_SERVER_URL": "${MCP_SERVER_URL:-https://order-mcp-74afyau24q-uc.a.run.app/mcp}",
+                  "MODEL": "${MODEL:-anthropic/claude-haiku-4-5}",
+                  "CORS_ORIGINS": "[\"*\"]"
+                }
+              },
+              "ImageRepositoryType": "ECR"
+            },
+            "AutoDeploymentsEnabled": false
+          }
+          EOF
+
+          aws apprunner update-service \
+            --service-arn "$SERVICE_ARN" \
+            --source-configuration file:///tmp/apprunner-config.json \
+            --region $AWS_REGION
+
+      - name: Wait for App Runner deployment to complete
+        env:
+          SERVICE_ARN: ${{ secrets.APPRUNNER_SERVICE_ARN }}
+        run: |
+          echo "Waiting for App Runner service to reach RUNNING state..."
+          for i in $(seq 1 30); do
+            STATUS=$(aws apprunner describe-service \
+              --service-arn "$SERVICE_ARN" \
+              --query 'Service.Status' \
+              --output text \
+              --region $AWS_REGION)
+            echo "  Status: $STATUS (attempt $i/30)"
+            case "$STATUS" in
+              RUNNING)
+                echo "Deployment successful."
+                exit 0
+                ;;
+              CREATE_FAILED|UPDATE_FAILED|DELETE_FAILED)
+                echo "Deployment failed with status: $STATUS"
+                exit 1
+                ;;
+            esac
+            sleep 20
+          done
+          echo "Timed out waiting for deployment."
+          exit 1
