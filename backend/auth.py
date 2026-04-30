@@ -41,15 +41,14 @@ async def verify_pin(email: str, pin: str) -> CustomerInfo:
     except Exception as exc:
         raise AuthError(f"MCP connection failed: {exc}") from exc
 
-    if "Error" in text or "not found" in text.lower() or "incorrect" in text.lower():
-        raise AuthError("Invalid email or PIN")
-
     customer_id = _extract(r"Customer ID:\s*([a-f0-9-]{36})", text)
     name = _extract(r"Customer verified:\s*(.+)", text)
     role = _extract(r"Role:\s*(\w+)", text) or "customer"
 
     if not customer_id:
-        raise AuthError("Could not parse customer identity from MCP response")
+        raise AuthError("Invalid email or PIN")
+    if not name:
+        raise AuthError("Invalid email or PIN")
 
     return CustomerInfo(customer_id=customer_id, name=name, email=email, role=role)
 

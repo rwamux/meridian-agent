@@ -1,26 +1,26 @@
-import { useState } from "react";
-import { ChatMessage, chatApi } from "../api/client";
+import { useId, useState } from "react";
+import { ChatMessage, sendMessage } from "../api/client";
 import ChatWindow from "../components/ChatWindow";
 import { useAuth } from "../context/AuthContext";
 
 export default function Chat() {
   const { user, logout } = useAuth();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [history, setHistory] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<(ChatMessage & { id: string })[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const idPrefix = useId();
 
   async function handleSend(text: string) {
-    const userMsg: ChatMessage = { role: "user", content: text };
+    const userMsg = { id: `${idPrefix}-${messages.length}`, role: "user" as const, content: text };
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
     setError("");
 
     try {
-      const { data } = await chatApi.send(text, history);
-      const assistantMsg: ChatMessage = { role: "assistant", content: data.response };
+      const history: ChatMessage[] = messages.map(({ role, content }) => ({ role, content }));
+      const { data } = await sendMessage(text, history);
+      const assistantMsg = { id: `${idPrefix}-${messages.length + 1}`, role: "assistant" as const, content: data.response };
       setMessages((prev) => [...prev, assistantMsg]);
-      setHistory(data.history);
     } catch {
       setError("Something went wrong. Please try again.");
       setMessages((prev) => prev.slice(0, -1));
@@ -31,7 +31,6 @@ export default function Chat() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-meridian-600 flex items-center justify-center">

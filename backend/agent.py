@@ -1,4 +1,3 @@
-"""Chat agent: OpenRouter LLM + Meridian MCP tools."""
 from __future__ import annotations
 
 from agents import Agent, OpenAIProvider, RunConfig, Runner, set_tracing_disabled
@@ -32,24 +31,6 @@ to Meridian's live catalog and order management system through your tools.
 """
 
 
-def _build_run_config() -> RunConfig:
-    provider = OpenAIProvider(
-        base_url=settings.openrouter_base_url,
-        api_key=settings.openrouter_api_key,
-        use_responses=False,
-    )
-    return RunConfig(model_provider=provider)
-
-
-def _build_mcp_server() -> MCPServerStreamableHttp:
-    return MCPServerStreamableHttp(
-        params=MCPServerStreamableHttpParams(url=settings.mcp_server_url),
-        name="meridian-orders",
-        client_session_timeout_seconds=60,
-        cache_tools_list=True,
-    )
-
-
 async def chat(
     message: str,
     history: list[dict],
@@ -57,19 +38,18 @@ async def chat(
     customer_email: str,
     customer_name: str,
 ) -> str:
-    """Run one conversational turn and return the assistant's reply."""
     system = _SYSTEM_PROMPT.format(
         name=customer_name,
         email=customer_email,
         customer_id=customer_id,
     )
 
-    input_messages = [
-        *history,
-        {"role": "user", "content": message},
-    ]
-
-    async with _build_mcp_server() as mcp:
+    async with MCPServerStreamableHttp(
+        params=MCPServerStreamableHttpParams(url=settings.mcp_server_url),
+        name="meridian-orders",
+        client_session_timeout_seconds=60,
+        cache_tools_list=True,
+    ) as mcp:
         agent = Agent(
             name="Meridian Support",
             instructions=system,
@@ -78,9 +58,15 @@ async def chat(
         )
         result = await Runner.run(
             agent,
-            input=input_messages,
-            run_config=_build_run_config(),
+            input=[*history, {"role": "user", "content": message}],
+            run_config=RunConfig(
+                model_provider=OpenAIProvider(
+                    base_url=settings.openrouter_base_url,
+                    api_key=settings.openrouter_api_key,
+                    use_responses=False,
+                )
+            ),
             max_turns=10,
         )
 
-    return str(result.final_output)
+    return result.final_output

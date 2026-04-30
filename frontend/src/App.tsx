@@ -1,16 +1,22 @@
+import { ReactNode } from "react";
 import { Navigate, Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function RouteGuard({
+  children,
+  requireAuth,
+  redirectTo,
+}: {
+  children: ReactNode;
+  requireAuth: boolean;
+  redirectTo: string;
+}) {
   const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
-}
-
-function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <Navigate to="/chat" replace /> : <>{children}</>;
+  if (requireAuth && !isAuthenticated) return <Navigate to={redirectTo} replace />;
+  if (!requireAuth && isAuthenticated) return <Navigate to={redirectTo} replace />;
+  return <>{children}</>;
 }
 
 export default function App() {
@@ -21,17 +27,17 @@ export default function App() {
           <Route
             path="/login"
             element={
-              <PublicRoute>
+              <RouteGuard requireAuth={false} redirectTo="/chat">
                 <Login />
-              </PublicRoute>
+              </RouteGuard>
             }
           />
           <Route
             path="/chat"
             element={
-              <ProtectedRoute>
+              <RouteGuard requireAuth redirectTo="/login">
                 <Chat />
-              </ProtectedRoute>
+              </RouteGuard>
             }
           />
           <Route path="*" element={<Navigate to="/login" replace />} />

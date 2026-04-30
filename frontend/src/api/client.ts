@@ -22,17 +22,10 @@ export interface LoginResponse {
   customer_id: string;
 }
 
-export interface ChatResponse {
-  response: string;
-  history: ChatMessage[];
-}
-
 export const authApi = {
   login: (email: string, pin: string) =>
     api.post<LoginResponse>("/auth/login", { email, pin }),
 };
 
-export const chatApi = {
-  send: (message: string, history: ChatMessage[]) =>
-    api.post<ChatResponse>("/chat", { message, history }),
-};
+export const sendMessage = (message: string, history: ChatMessage[]) =>
+  api.post<{ response: string }>("/chat", { message, history });

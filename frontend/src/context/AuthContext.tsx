@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { ReactNode, createContext, useCallback, useContext, useState } from "react";
 import { authApi, setAuthToken } from "../api/client";
 
 interface User {
@@ -9,7 +9,6 @@ interface User {
 
 interface AuthContextValue {
   user: User | null;
-  token: string | null;
   login: (email: string, pin: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -19,47 +18,40 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const SESSION_KEY = "meridian_session";
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    const stored = sessionStorage.getItem(SESSION_KEY);
-    return stored ? JSON.parse(stored).user : null;
-  });
-  const [token, setToken] = useState<string | null>(() => {
-    const stored = sessionStorage.getItem(SESSION_KEY);
-    return stored ? JSON.parse(stored).token : null;
-  });
+function loadSession(): { user: User; token: string } | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
-  useEffect(() => {
-    if (token) setAuthToken(token);
-  }, [token]);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(() => loadSession()?.user ?? null);
+
+  // Restore axios header on mount if session exists
+  useState(() => {
+    const session = loadSession();
+    if (session) setAuthToken(session.token);
+  });
 
   const login = useCallback(async (email: string, pin: string) => {
     const { data } = await authApi.login(email, pin);
-    const newUser = {
-      name: data.customer_name,
-      customer_id: data.customer_id,
-      email,
-    };
+    const newUser = { name: data.customer_name, customer_id: data.customer_id, email };
     setUser(newUser);
-    setToken(data.access_token);
     setAuthToken(data.access_token);
-    sessionStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify({ user: newUser, token: data.access_token })
-    );
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ user: newUser, token: data.access_token }));
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
-    setToken(null);
     setAuthToken(null);
     sessionStorage.removeItem(SESSION_KEY);
   }, []);
 
   return (
-    <AuthContext.Provider
-      value={{ user, token, login, logout, isAuthenticated: !!token }}
-    >
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

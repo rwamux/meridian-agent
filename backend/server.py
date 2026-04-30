@@ -1,4 +1,3 @@
-"""FastAPI application — auth and chat endpoints."""
 from __future__ import annotations
 
 import os
@@ -12,7 +11,6 @@ from agent import chat
 from auth import AuthError, CustomerInfo, create_access_token, decode_access_token, verify_pin
 from config import settings
 from models import (
-    ChatMessage,
     ChatRequest,
     ChatResponse,
     HealthResponse,
@@ -44,11 +42,7 @@ def _get_current_customer(
 
 @app.get("/api/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    return HealthResponse(
-        status="ok",
-        model=settings.model,
-        mcp_url=settings.mcp_server_url,
-    )
+    return HealthResponse(status="ok", model=settings.model, mcp_url=settings.mcp_server_url)
 
 
 @app.post("/api/auth/login", response_model=LoginResponse)
@@ -56,13 +50,9 @@ async def login(req: LoginRequest) -> LoginResponse:
     try:
         info = await verify_pin(req.email, req.pin)
     except AuthError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or PIN",
-        )
-    token = create_access_token(info)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or PIN")
     return LoginResponse(
-        access_token=token,
+        access_token=create_access_token(info),
         customer_name=info.name,
         customer_id=info.customer_id,
     )
@@ -73,35 +63,24 @@ async def chat_endpoint(
     req: ChatRequest,
     customer: CustomerInfo = Depends(_get_current_customer),
 ) -> ChatResponse:
-    history_dicts = [{"role": m.role, "content": m.content} for m in req.history]
-
     try:
         reply = await chat(
             message=req.message,
-            history=history_dicts,
+            history=[m.model_dump() for m in req.history],
             customer_id=customer.customer_id,
             customer_email=customer.email,
             customer_name=customer.name,
         )
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Agent error: {exc}",
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Agent error: {exc}")
 
-    updated_history = req.history + [
-        ChatMessage(role="user", content=req.message),
-        ChatMessage(role="assistant", content=reply),
-    ]
-    return ChatResponse(response=reply, history=updated_history)
+    return ChatResponse(response=reply)
 
 
-# Serve React build — must be mounted after all API routes
 if os.path.exists("static"):
     app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)

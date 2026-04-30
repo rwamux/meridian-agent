@@ -1,9 +1,14 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ChatMessage } from "../api/client";
 import Message from "./Message";
 
+interface DisplayMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
+
 interface ChatWindowProps {
-  messages: ChatMessage[];
+  messages: DisplayMessage[];
   onSend: (text: string) => void;
   loading: boolean;
 }
@@ -26,7 +31,6 @@ export default function ChatWindow({ messages, onSend, loading }: ChatWindowProp
 
   return (
     <div className="flex flex-col h-full">
-      {/* Message list */}
       <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4 bg-gray-50">
         {messages.length === 0 && (
           <div className="text-center text-gray-400 text-sm mt-16">
@@ -36,18 +40,13 @@ export default function ChatWindow({ messages, onSend, loading }: ChatWindowProp
           </div>
         )}
 
-        {messages.map((msg, i) => (
-          <Message key={i} role={msg.role} content={msg.content} />
+        {messages.map((msg) => (
+          <Message key={msg.id} role={msg.role} content={msg.content} />
         ))}
 
         {loading && (
           <div className="flex items-end gap-2">
-            <div className="flex-shrink-0 w-7 h-7 rounded-full bg-meridian-600 flex items-center justify-center">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            </div>
+            <BotAvatar />
             <div className="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-bl-sm px-4 py-3">
               <span className="flex gap-1">
                 <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
@@ -61,7 +60,6 @@ export default function ChatWindow({ messages, onSend, loading }: ChatWindowProp
         <div ref={bottomRef} />
       </div>
 
-      {/* Input bar */}
       <form
         onSubmit={handleSubmit}
         className="border-t border-gray-200 bg-white px-4 py-3 flex items-center gap-3"
@@ -85,6 +83,17 @@ export default function ChatWindow({ messages, onSend, loading }: ChatWindowProp
           </svg>
         </button>
       </form>
+    </div>
+  );
+}
+
+export function BotAvatar() {
+  return (
+    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-meridian-600 flex items-center justify-center">
+      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      </svg>
     </div>
   );
 }
