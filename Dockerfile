@@ -10,9 +10,8 @@ RUN npm run build
 FROM python:3.12-slim
 WORKDIR /app
 
-RUN pip install --no-cache-dir hatchling
-COPY backend/pyproject.toml .
-RUN pip install --no-cache-dir .
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/*.py ./
 
