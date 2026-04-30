@@ -8,13 +8,11 @@ terraform {
     }
   }
 
-  # Remote state — create this S3 bucket + DynamoDB table manually once before first apply
+  # bucket and dynamodb_table passed via -backend-config at init time
   backend "s3" {
-    bucket         = "meridian-tfstate"
-    key            = "meridian-agent/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "meridian-tfstate-lock"
-    encrypt        = true
+    key     = "meridian-agent/terraform.tfstate"
+    region  = "us-east-1"
+    encrypt = true
   }
 }
 

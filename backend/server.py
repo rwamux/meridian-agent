@@ -1,9 +1,12 @@
 """FastAPI application — auth and chat endpoints."""
 from __future__ import annotations
 
+import os
+
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 
 from agent import chat
 from auth import AuthError, CustomerInfo, create_access_token, decode_access_token, verify_pin
@@ -91,6 +94,11 @@ async def chat_endpoint(
         ChatMessage(role="assistant", content=reply),
     ]
     return ChatResponse(response=reply, history=updated_history)
+
+
+# Serve React build — must be mounted after all API routes
+if os.path.exists("static"):
+    app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 
 if __name__ == "__main__":
