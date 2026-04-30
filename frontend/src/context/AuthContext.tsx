@@ -1,4 +1,4 @@
-import { ReactNode, createContext, useCallback, useContext, useState } from "react";
+import { ReactNode, createContext, useCallback, useContext, useEffect, useState } from "react";
 import { authApi, setAuthToken } from "../api/client";
 
 interface User {
@@ -30,11 +30,10 @@ function loadSession(): { user: User; token: string } | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => loadSession()?.user ?? null);
 
-  // Restore axios header on mount if session exists
-  useState(() => {
+  useEffect(() => {
     const session = loadSession();
     if (session) setAuthToken(session.token);
-  });
+  }, []);
 
   const login = useCallback(async (email: string, pin: string) => {
     const { data } = await authApi.login(email, pin);

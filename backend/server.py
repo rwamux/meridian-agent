@@ -71,8 +71,8 @@ async def chat_endpoint(
             customer_email=customer.email,
             customer_name=customer.name,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Agent error: {exc}")
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Something went wrong. Please try again.")
 
     return ChatResponse(response=reply)
 
