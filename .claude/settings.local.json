@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(/c/Users/daily/anaconda3/envs/envjs/python.exe *)"
-    ]
-  }
-}
